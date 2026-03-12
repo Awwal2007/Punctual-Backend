@@ -31,9 +31,16 @@ const PORT = process.env.PORT || 5000;
 
 const { checkMissedClasses } = require('./utils/notifications');
 
-mongoose.connect(process.env.MONGODB_URI)
-  .then(() => {
-    console.log('Connected to MongoDB');
+async function startServer() {
+  try {
+    
+    const connection = await mongoose.connect(process.env.MONGODB_URI)
+    if(connection){
+      console.log('Connected to MongoDB');
+    }else{
+      console.log('Could not connect to MongoDB');
+      process.exit(1);
+    }
 
     // Start background checks for missed classes every 5 minutes
     setInterval(checkMissedClasses, 5 * 60 * 1000);
@@ -41,8 +48,12 @@ mongoose.connect(process.env.MONGODB_URI)
     app.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);
     });
-  })
-  .catch(err => console.error('Could not connect to MongoDB', err));
+  } catch (error) {
+    console.error('Could not connect to MongoDB', error);
+    process.exit(1);
+  }
+}
 
+startServer();
 
 module.exports = app;
