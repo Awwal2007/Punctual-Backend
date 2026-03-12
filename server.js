@@ -1,6 +1,7 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
+const morgan = require('morgan')
 const dotenv = require('dotenv');
 
 dotenv.config();
@@ -11,10 +12,11 @@ const app = express();
 app.use(cors(
   {
     origin: process.env.FRONTEND_URL,
-    credentials: true,
+    // credentials: true,
   }
 ));
 app.use(express.json());
+app.use(morgan('dev'))
 
 app.get('/', (req, res) => {
   res.send('Welcome to Punctual Attendance System Api Version 1.0.0');
