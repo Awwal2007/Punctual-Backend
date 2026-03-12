@@ -49,7 +49,12 @@ router.post('/mark', auth, authorize('student'), async (req, res) => {
     const Class = require('../models/Class');
     const targetClass = await Class.findById(session.class);
     if (!targetClass.students.includes(req.user.id)) {
-      return res.status(403).json({ message: 'You are not enrolled in this class' });
+      return res.status(403).json({ 
+        message: 'You are not enrolled in this class',
+        notEnrolled: true,
+        classId: session.class,
+        className: targetClass.name
+      });
     }
 
     const attendance = new Attendance({

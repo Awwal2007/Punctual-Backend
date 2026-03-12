@@ -33,11 +33,11 @@ const { checkMissedClasses } = require('./utils/notifications');
 
 async function startServer() {
   try {
-    
+
     const connection = await mongoose.connect(process.env.MONGODB_URI)
-    if(connection){
+    if (connection) {
       console.log('Connected to MongoDB');
-    }else{
+    } else {
       console.log('Could not connect to MongoDB');
       process.exit(1);
     }

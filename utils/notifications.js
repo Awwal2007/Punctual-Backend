@@ -35,7 +35,7 @@ const sendNotification = async (tokens, payload) => {
   try {
     const response = await admin.messaging().sendEachForMulticast(message);
     console.log(`Successfully sent ${response.successCount} notifications`);
-    
+
     // Clean up failed tokens (e.g. invalid or expired)
     if (response.failureCount > 0) {
       const failedTokens = [];
