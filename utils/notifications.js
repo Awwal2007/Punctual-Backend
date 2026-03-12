@@ -29,6 +29,28 @@ const sendNotification = async (tokens, payload) => {
       title: payload.title,
       body: payload.body,
     },
+    webpush: {
+      headers: {
+        Urgency: 'high'
+      },
+      notification: {
+        body: payload.body,
+        icon: '/icon.png',
+        badge: '/icon.png',
+        vibrate: [200, 100, 200],
+        requireInteraction: true,
+        tag: 'punctual-attendance'
+      }
+    },
+    android: {
+      priority: 'high',
+      notification: {
+        channel_id: 'default',
+        priority: 'high',
+        vibrate_timings: ['0.2s', '0.1s', '0.2s'],
+        notification_priority: 'PRIORITY_MAX'
+      }
+    },
     tokens: tokens,
   };
 
