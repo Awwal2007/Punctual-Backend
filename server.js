@@ -8,7 +8,12 @@ dotenv.config();
 const app = express();
 
 // Middleware
-app.use(cors());
+app.use(cors(
+  {
+    origin: process.env.FRONTEND_URL,
+    credentials: true,
+  }
+));
 app.use(express.json());
 
 app.get('/', (req, res) => {
@@ -27,10 +32,10 @@ const { checkMissedClasses } = require('./utils/notifications');
 mongoose.connect(process.env.MONGODB_URI)
   .then(() => {
     console.log('Connected to MongoDB');
-    
+
     // Start background checks for missed classes every 5 minutes
     setInterval(checkMissedClasses, 5 * 60 * 1000);
-    
+
     app.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);
     });
