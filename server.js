@@ -32,3 +32,6 @@ mongoose.connect(process.env.MONGODB_URI)
     });
   })
   .catch(err => console.error('Could not connect to MongoDB', err));
+
+
+module.exports = app;
