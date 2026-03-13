@@ -1,11 +1,41 @@
 const admin = require('firebase-admin');
+let serviceAccount;
 
-// Initialize Firebase Admin (requires service account JSON)
-// The service account should be provided via environment variable
-// or a file. For now, we assume it's initialized if the config exists.
+// 1. Try environment variable (Standard for Production/CI)
 if (process.env.FIREBASE_SERVICE_ACCOUNT) {
   try {
-    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+    const rawVal = process.env.FIREBASE_SERVICE_ACCOUNT.trim();
+    // Try parsing as JSON first, if it fails, try Base64 decoding
+    if (rawVal.startsWith('{')) {
+      serviceAccount = JSON.parse(rawVal);
+    } else {
+      serviceAccount = JSON.parse(Buffer.from(rawVal, 'base64').toString('utf8'));
+    }
+  } catch (err) {
+    console.error('Error parsing FIREBASE_SERVICE_ACCOUNT env:', err.message);
+  }
+}
+
+// 2. Fallback to local file (Standard for Development)
+if (!serviceAccount) {
+  try {
+    const saPath = require('path').join(__dirname, '../firebase-service-account.json');
+    const fs = require('fs');
+    if (fs.existsSync(saPath)) {
+      serviceAccount = JSON.parse(fs.readFileSync(saPath, 'utf8'));
+    }
+  } catch (err) {
+    console.error('Error loading firebase-service-account.json:', err.message);
+  }
+}
+
+// 3. Initialize Firebase Admin
+if (serviceAccount) {
+  try {
+    // Fix private key formatting (essential for PEM keys in environment variables)
+    if (serviceAccount.private_key) {
+      serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n');
+    }
     admin.initializeApp({
       credential: admin.credential.cert(serviceAccount)
     });
