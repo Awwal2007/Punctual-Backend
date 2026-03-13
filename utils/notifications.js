@@ -59,6 +59,10 @@ const sendNotification = async (tokens, payload) => {
       title: payload.title,
       body: payload.body,
     },
+    data: {
+      url: payload.url || '/login',
+      click_action: payload.url || '/login'
+    },
     webpush: {
       headers: {
         Urgency: 'high'
@@ -69,8 +73,11 @@ const sendNotification = async (tokens, payload) => {
         badge: '/icon.png',
         vibrate: [200, 100, 200],
         requireInteraction: true,
-        tag: 'punctual-attendance'
-      }
+        tag: 'punctual-attendance',
+        data: {
+          url: payload.url || '/login'
+        }
+      },
     },
     android: {
       priority: 'high',

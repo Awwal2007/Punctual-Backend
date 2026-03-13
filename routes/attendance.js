@@ -57,6 +57,22 @@ router.post('/mark', auth, authorize('student'), async (req, res) => {
       });
     }
 
+    // Check for existing attendance for this class today
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date();
+    endOfDay.setHours(23, 59, 59, 999);
+
+    const existingDailyAttendance = await Attendance.findOne({
+      student: req.user.id,
+      class: session.class,
+      timestamp: { $gte: startOfDay, $lte: endOfDay }
+    });
+
+    if (existingDailyAttendance) {
+      return res.status(400).json({ message: 'Attendance already marked for this class today' });
+    }
+
     const attendance = new Attendance({
       student: req.user.id,
       class: session.class,
