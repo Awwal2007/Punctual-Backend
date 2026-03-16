@@ -47,7 +47,7 @@ if (serviceAccount) {
 
 const QRSession = require('../models/QRSession');
 const Attendance = require('../models/Attendance');
-const Class = require('../models/Class');
+const Session = require('../models/Session');
 const User = require('../models/User');
 
 const sendNotification = async (tokens, payload) => {
@@ -93,9 +93,7 @@ const sendNotification = async (tokens, payload) => {
 
   try {
     const response = await admin.messaging().sendEachForMulticast(message);
-    console.log(`Successfully sent ${response.successCount} notifications`);
-
-    // Clean up failed tokens (e.g. invalid or expired)
+    // clean up failed tokens...
     if (response.failureCount > 0) {
       const failedTokens = [];
       response.responses.forEach((resp, idx) => {
@@ -103,8 +101,7 @@ const sendNotification = async (tokens, payload) => {
           failedTokens.push(tokens[idx]);
         }
       });
-      console.log('Failed tokens:', failedTokens);
-      return failedTokens; // Backend can use this to remove dead tokens
+      return failedTokens;
     }
   } catch (error) {
     console.error('Error sending notification:', error);
@@ -122,29 +119,27 @@ const checkMissedClasses = async () => {
       active: true
     });
 
-    for (const session of expiredSessions) {
-      const targetClass = await Class.findById(session.class).populate('students');
-      if (!targetClass) continue;
+    for (const qrSession of expiredSessions) {
+      const targetSession = await Session.findById(qrSession.class).populate('workers');
+      if (!targetSession) continue;
 
-      const attendances = await Attendance.find({ session: session._id });
-      const markedStudentIds = attendances.map(a => a.student.toString());
+      const attendances = await Attendance.find({ qrSession: qrSession._id });
+      const markedWorkerIds = attendances.map(a => a.worker.toString());
 
-      for (const student of targetClass.students) {
-        if (!markedStudentIds.includes(student._id.toString())) {
-          // Student missed class
-          if (student.fcmTokens && student.fcmTokens.length > 0) {
-            await sendNotification(student.fcmTokens, {
-              title: 'Missed Class! ⚠️',
-              body: `You didn't mark attendance for ${targetClass.name}. Please contact your teacher.`
+      for (const worker of targetSession.workers) {
+        if (!markedWorkerIds.includes(worker._id.toString())) {
+          // Worker missed check-in
+          if (worker.fcmTokens && worker.fcmTokens.length > 0) {
+            await sendNotification(worker.fcmTokens, {
+              title: 'Check-in Missed! ⚠️',
+              body: `You didn't check in for ${targetSession.name}. Please contact your manager.`
             });
           }
         }
       }
-
-      // Mark session as fully processed if needed or just leave it
     }
   } catch (err) {
-    console.error('Check missed classes failed:', err.message);
+    console.error('Check missed sessions failed:', err.message);
   }
 };
 

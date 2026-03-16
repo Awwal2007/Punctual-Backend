@@ -8,14 +8,14 @@ const { auth, authorize } = require('../middleware/auth');
 const { sendNotification } = require('../utils/notifications');
 
 // @route   POST api/attendance/generate-qr
-// @desc    Generate a QR code session for a class (Teacher only)
-router.post('/generate-qr', auth, authorize('teacher'), async (req, res) => {
-  const { classId, durationMinutes } = req.body;
+// @desc    Generate a QR code session for a Session (Manager only)
+router.post('/generate-qr', auth, authorize('manager'), async (req, res) => {
+  const { sessionId, durationMinutes } = req.body;
   try {
     const expiresAt = new Date(Date.now() + durationMinutes * 60 * 1000);
     const session = new QRSession({
-      class: classId,
-      teacher: req.user.id,
+      class: sessionId,
+      manager: req.user.id,
       expiresAt
     });
     await session.save();
@@ -23,7 +23,7 @@ router.post('/generate-qr', auth, authorize('teacher'), async (req, res) => {
     // Data to be encoded in QR code
     const qrData = JSON.stringify({
       sessionId: session._id,
-      classId: classId,
+      classId: sessionId,
       expiresAt: expiresAt
     });
 
@@ -36,68 +36,68 @@ router.post('/generate-qr', auth, authorize('teacher'), async (req, res) => {
 });
 
 // @route   POST api/attendance/mark
-// @desc    Mark attendance by scanning QR (Student only)
-router.post('/mark', auth, authorize('student'), async (req, res) => {
-  const { sessionId } = req.body;
+// @desc    Mark attendance by scanning QR (Worker only)
+router.post('/mark', auth, authorize('worker'), async (req, res) => {
+  const { sessionId } = req.body; // This is the QRSession ID
   try {
-    const session = await QRSession.findById(sessionId);
-    if (!session || !session.active || session.expiresAt < new Date()) {
+    const qrSession = await QRSession.findById(sessionId);
+    if (!qrSession || !qrSession.active || qrSession.expiresAt < new Date()) {
       return res.status(400).json({ message: 'QR session expired or invalid' });
     }
 
-    // Check if student is enrolled in the class
-    const Class = require('../models/Class');
-    const targetClass = await Class.findById(session.class);
-    if (!targetClass.students.includes(req.user.id)) {
+    // Check if worker is enrolled in the session
+    const Session = require('../models/Session');
+    const targetSession = await Session.findById(qrSession.class);
+    if (!targetSession.workers.includes(req.user.id)) {
       return res.status(403).json({ 
-        message: 'You are not enrolled in this class',
+        message: 'You are not enrolled in this work session',
         notEnrolled: true,
-        classId: session.class,
-        className: targetClass.name
+        sessionId: qrSession.class,
+        sessionName: targetSession.name
       });
     }
 
-    // Check for existing attendance for this class today
+    // Check for existing attendance for this session today
     const startOfDay = new Date();
     startOfDay.setHours(0, 0, 0, 0);
     const endOfDay = new Date();
     endOfDay.setHours(23, 59, 59, 999);
 
     const existingDailyAttendance = await Attendance.findOne({
-      student: req.user.id,
-      class: session.class,
+      worker: req.user.id,
+      session: qrSession.class,
       timestamp: { $gte: startOfDay, $lte: endOfDay }
     });
 
     if (existingDailyAttendance) {
-      return res.status(400).json({ message: 'Attendance already marked for this class today' });
+      return res.status(400).json({ message: 'Check-in already recorded for this session today' });
     }
 
     const attendance = new Attendance({
-      student: req.user.id,
-      class: session.class,
-      session: sessionId
+      worker: req.user.id,
+      session: qrSession.class,
+      qrSession: sessionId
     });
     await attendance.save();
 
-    // Notify teacher
+    // Notify Manager
     try {
-      const teacher = await User.findById(session.teacher);
-      if (teacher && teacher.fcmTokens && teacher.fcmTokens.length > 0) {
-        const student = await User.findById(req.user.id);
-        await sendNotification(teacher.fcmTokens, {
-          title: 'Student Checked In! ✅',
-          body: `${student.name} just marked attendance for your class.`
+      const manager = await User.findById(qrSession.manager);
+      if (manager && manager.fcmTokens && manager.fcmTokens.length > 0) {
+        const worker = await User.findById(req.user.id);
+        await sendNotification(manager.fcmTokens, {
+          title: 'Worker Checked In! ✅',
+          body: `${worker.name} just checked in for your session.`
         });
       }
     } catch (notifyErr) {
       console.error('Notification failed:', notifyErr.message);
     }
 
-    res.json({ message: 'Attendance marked successfully' });
+    res.json({ message: 'Check-in successful' });
   } catch (err) {
     if (err.code === 11000) {
-      return res.status(400).json({ message: 'Attendance already marked for this session' });
+      return res.status(400).json({ message: 'Check-in already recorded for this QR code.' });
     }
     console.error(err.message);
     res.status(500).send('Server error');
@@ -105,22 +105,23 @@ router.post('/mark', auth, authorize('student'), async (req, res) => {
 });
 
 // @route   GET api/attendance/history
-// @desc    Get attendance history for student or report for teacher
+// @desc    Get attendance history for worker or report for manager
 router.get('/history', auth, async (req, res) => {
   try {
     let history;
-    if (req.user.role === 'student') {
-      history = await Attendance.find({ student: req.user.id })
-        .populate('class', 'name section')
+    if (req.user.role === 'worker') {
+      history = await Attendance.find({ worker: req.user.id })
+        .populate('worker', 'name email workerId')
+        .populate('session', 'name section')
         .sort({ timestamp: -1 });
     } else {
-      // Teacher get attendance for their classes
-      const Class = require('../models/Class');
-      const classes = await Class.find({ teacher: req.user.id });
-      const classIds = classes.map(c => c._id);
-      history = await Attendance.find({ class: { $in: classIds } })
-        .populate('student', 'name email')
-        .populate('class', 'name section')
+      // Manager get attendance for their sessions
+      const Session = require('../models/Session');
+      const sessions = await Session.find({ manager: req.user.id });
+      const sessionIds = sessions.map(s => s._id);
+      history = await Attendance.find({ session: { $in: sessionIds } })
+        .populate('worker', 'name email workerId')
+        .populate('session', 'name section')
         .sort({ timestamp: -1 });
     }
     res.json(history);
@@ -132,35 +133,35 @@ router.get('/history', auth, async (req, res) => {
 
 const { Parser } = require('json2csv');
 
-// @route   GET api/attendance/export/:classId
+// @route   GET api/attendance/export/:sessionId
 // @desc    Export attendance as CSV
-router.get('/export/:classId', auth, async (req, res) => {
+router.get('/export/:sessionId', auth, async (req, res) => {
   try {
-    const classId = req.params.classId;
-    const attendanceRecords = await Attendance.find({ class: classId })
-      .populate('student', 'name email')
-      .populate('class', 'name section')
+    const sessionId = req.params.sessionId;
+    const attendanceRecords = await Attendance.find({ session: sessionId })
+      .populate('worker', 'name email')
+      .populate('session', 'name section')
       .sort({ timestamp: -1 });
 
     if (attendanceRecords.length === 0) {
-      return res.status(404).json({ message: 'No attendance records found for this class' });
+      return res.status(404).json({ message: 'No records found for this session' });
     }
 
     const data = attendanceRecords.map(record => ({
-      Student: record.student.name,
-      Email: record.student.email,
-      Class: record.class.name,
-      Section: record.class.section || 'General',
+      Worker: record.worker.name,
+      Email: record.worker.email,
+      Session: record.session.name,
+      Category: record.session.section || 'General',
       Date: new Date(record.timestamp).toLocaleDateString(),
       Time: new Date(record.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     }));
 
-    const fields = ['Student', 'Email', 'Class', 'Section', 'Date', 'Time'];
+    const fields = ['Worker', 'Email', 'Session', 'Category', 'Date', 'Time'];
     const json2csvParser = new Parser({ fields });
     const csv = json2csvParser.parse(data);
 
     res.header('Content-Type', 'text/csv');
-    res.attachment(`attendance_${classId}.csv`);
+    res.attachment(`attendance_${sessionId}.csv`);
     return res.send(csv);
   } catch (err) {
     console.error(err.message);

@@ -6,13 +6,13 @@ const { auth } = require('../middleware/auth');
 
 // @route   POST api/auth/signup
 router.post('/signup', async (req, res) => {
-  const { name, email, password, role } = req.body;
-
+  const { name, email, password, role, workerId } = req.body;
+  
   try {
     let user = await User.findOne({ email });
     if (user) return res.status(400).json({ message: 'User already exists' });
 
-    user = new User({ name, email, password, role });
+    user = new User({ name, email, password, role: role || 'worker', workerId });
     await user.save();
 
     const payload = { id: user.id, role: user.role };

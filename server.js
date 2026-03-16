@@ -12,7 +12,7 @@ const app = express();
 app.use(cors(
   {
     origin: process.env.FRONTEND_URL,
-    // credentials: true,
+    credentials: true,
   }
 ));
 app.use(express.json());
@@ -24,7 +24,7 @@ app.get('/', (req, res) => {
 
 // Routes
 app.use('/api/v1/auth', require('./routes/auth'));
-app.use('/api/v1/classes', require('./routes/classes'));
+app.use('/api/v1/sessions', require('./routes/sessions'));
 app.use('/api/v1/attendance', require('./routes/attendance'));
 
 const PORT = process.env.PORT || 5000;
